@@ -16,9 +16,9 @@
 // map 2d to 1d array
 #define IDX_2D(x, y, stride) (y * stride + x)
 // leftover from subarray chunks
-#define IDX_2_ROW(i, stride) (i % stride)
+#define IDX_2_COL(i, stride) (i % stride)
 // go back to nearest subarray, then divide elements by length of subarray
-#define IDX_2_COL(i, stride) ((i - (i % stride)) / stride)
+#define IDX_2_ROW(i, stride) ((i - (i % stride)) / stride)
 
 // Compute C = A * B
 __global__ 
@@ -32,11 +32,13 @@ void matrixMultiply(float *A, float *B, float *C, int numARows,
   // boundary check
   if (i >= numCRows * numCColumns) return;
 
+  // lock in which row from A, and which col from B
   int aRow = IDX_2_ROW(i, numCColumns);
   int bCol = IDX_2_COL(i, numCColumns);
 
+  // build up dot product along length of A's subarrays (aka # of B's subarrays)
   float result = 0;
-  for (size_t i = 0; i < numCColumns; i++) {
+  for (size_t i = 0; i < numAColumns; i++) {
     result += A[IDX_2D(i, aRow, numAColumns)] * B[IDX_2D(bCol, i, numBColumns)];
   }
   C[i] = result;
