@@ -13,6 +13,10 @@
 
 // helper for computing malloc size
 #define DATA_SIZE(inputLen) (inputLen * sizeof(float))
+// map 2d to 1d array
+#define IDX_2D(x, y, stride) (y * stride + x)
+// thread block size for tiling
+#define BLOCK_SIZE 8
 
 // Compute C = A * B
 __global__ void matrixMultiplyShared(float *A, float *B, float *C,
@@ -21,6 +25,16 @@ __global__ void matrixMultiplyShared(float *A, float *B, float *C,
                                      int numCRows, int numCColumns) {
   //@@ Insert code to implement matrix multiplication here
   //@@ You have to use shared memory for this MP
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (x >= numCColumns || y >= numCRows) return;
+
+  float result = 0;
+  for (size_t i = 0; i < numAColumns; i++) {
+    result += A[IDX_2D(i, y, numAColumns)] * B[IDX_2D(x, i, numBColumns)];
+  }
+  C[IDX_2D(x, y, numCColumns)] = result;
 }
 
 int main(int argc, char **argv) {
@@ -80,11 +94,13 @@ int main(int argc, char **argv) {
   wbTime_stop(GPU, "Copying input memory to the GPU.");
 
   //@@ Initialize the grid and block dimensions here
-  dim3 DimGrid(cInputSize/256, 1, 1);
+  dim3 DimGrid(numCRows / BLOCK_SIZE, numCColumns / BLOCK_SIZE, 1);
   // if leftovers, add one more
-  if ((cInputSize % 256) != 0)
+  if ((numCRows % BLOCK_SIZE) != 0)
     DimGrid.x++;
-  dim3 DimBlock(256, 1, 1);
+  if ((numCColumns % BLOCK_SIZE) != 0)
+    DimGrid.y++;
+  dim3 DimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
 
   wbTime_start(Compute, "Performing CUDA computation");
   //@@ Launch the GPU Kernel here
