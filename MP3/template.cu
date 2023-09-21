@@ -16,7 +16,7 @@
 // map 2d to 1d array
 #define IDX_2D(x, y, stride) (y * stride + x)
 // thread block size for tiling
-#define BLOCK_WIDTH 16
+#define BLOCK_WIDTH 32
 
 // Compute C = A * B
 __global__ void matrixMultiplyShared(float *A, float *B, float *C,
@@ -41,22 +41,21 @@ __global__ void matrixMultiplyShared(float *A, float *B, float *C,
   float result = 0;
   for (int q = 0; q < ceil((1.0 * WIDTH) / BLOCK_WIDTH); q++) {
     // Phase 1: load from source matricies into shared mem constructs
-    int offsetA = q * BLOCK_WIDTH + tx;
-    int offsetB = q * BLOCK_WIDTH + ty;
-    int threadTargetIdxA = row * WIDTH + q * BLOCK_WIDTH + tx;
-    int threadTargetIdxB = (q * BLOCK_WIDTH + ty) * WIDTH + col;
-    // if (tx == 0 && ty == 0 && bx < 3 && by < 3)
-    //   printf("Kernel offsets A %d, %d | B %d, %d\n", row, offsetA, col, offsetB);
+    int offsetA = q * BLOCK_WIDTH + tx; // which col
+    int offsetB = q * BLOCK_WIDTH + ty; // which row
+    int threadTargetIdxA = row * numAColumns + offsetA;
+    int threadTargetIdxB = offsetB * numBColumns + col;
 
     // handle halo cells
-    if (row < WIDTH && offsetA < WIDTH)
+    if (row < numCRows && (q*BLOCK_WIDTH+tx) < WIDTH)
       stA[ty][tx] = A[threadTargetIdxA];
     else {
       //printf("Kernel A halo at thread %dx%d\n", tx, ty);
       stA[ty][tx] = 0;
     }
 
-    if (offsetB < WIDTH && col < WIDTH )
+    // handle halo cells
+    if ((q*BLOCK_WIDTH+ty) < WIDTH && col < numCColumns)
       stB[ty][tx] = B[threadTargetIdxB];
     else {
       //printf("Kernel B halo at thread %dx%d\n", tx, ty);
@@ -65,7 +64,6 @@ __global__ void matrixMultiplyShared(float *A, float *B, float *C,
     __syncthreads();
     
     // Phase 2: compute matrix mul with smaller subunit matricies
-    
     if (col < numCColumns && row < numCRows) {
       for (int i = 0; i < BLOCK_WIDTH; i++) {
         result += stA[ty][i] * stB[i][tx];
