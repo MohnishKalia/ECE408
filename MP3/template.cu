@@ -16,7 +16,7 @@
 // map 2d to 1d array
 #define IDX_2D(x, y, stride) (y * stride + x)
 // thread block size for tiling
-#define BLOCK_SIZE 8
+#define BLOCK_WIDTH 8
 
 // Compute C = A * B
 __global__ void matrixMultiplyShared(float *A, float *B, float *C,
@@ -94,13 +94,12 @@ int main(int argc, char **argv) {
   wbTime_stop(GPU, "Copying input memory to the GPU.");
 
   //@@ Initialize the grid and block dimensions here
-  dim3 DimGrid(numCRows / BLOCK_SIZE, numCColumns / BLOCK_SIZE, 1);
-  // if leftovers, add one more
-  if ((numCRows % BLOCK_SIZE) != 0)
-    DimGrid.x++;
-  if ((numCColumns % BLOCK_SIZE) != 0)
-    DimGrid.y++;
-  dim3 DimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
+  dim3 DimGrid(
+    ceil((1.0*numCColumns)/BLOCK_WIDTH),
+    ceil((1.0*numCRows)/BLOCK_WIDTH),
+    1
+  );
+  dim3 DimBlock(BLOCK_WIDTH, BLOCK_WIDTH, 1);
 
   wbTime_start(Compute, "Performing CUDA computation");
   //@@ Launch the GPU Kernel here
