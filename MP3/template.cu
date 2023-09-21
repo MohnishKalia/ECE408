@@ -16,7 +16,7 @@
 // map 2d to 1d array
 #define IDX_2D(x, y, stride) (y * stride + x)
 // thread block size for tiling
-#define BLOCK_WIDTH 8
+#define BLOCK_WIDTH 16
 
 // Compute C = A * B
 __global__ void matrixMultiplyShared(float *A, float *B, float *C,
@@ -25,16 +25,58 @@ __global__ void matrixMultiplyShared(float *A, float *B, float *C,
                                      int numCRows, int numCColumns) {
   //@@ Insert code to implement matrix multiplication here
   //@@ You have to use shared memory for this MP
-  int x = blockIdx.x * blockDim.x + threadIdx.x;
-  int y = blockIdx.y * blockDim.y + threadIdx.y;
+  __shared__ float stA[BLOCK_WIDTH][BLOCK_WIDTH];
+  __shared__ float stB[BLOCK_WIDTH][BLOCK_WIDTH];
 
-  if (x >= numCColumns || y >= numCRows) return;
+  int bx = blockIdx.x;
+  int by = blockIdx.y;
+  int tx = threadIdx.x;
+  int ty = threadIdx.y;
+  int col = bx * blockDim.x + tx;
+  int row = by * blockDim.y + ty;
 
+  int WIDTH = numAColumns; // or numBRows
+
+  // over q tiles, load and compute
   float result = 0;
-  for (size_t i = 0; i < numAColumns; i++) {
-    result += A[IDX_2D(i, y, numAColumns)] * B[IDX_2D(x, i, numBColumns)];
+  for (int q = 0; q < ceil((1.0 * WIDTH) / BLOCK_WIDTH); q++) {
+    // Phase 1: load from source matricies into shared mem constructs
+    int offsetA = q * BLOCK_WIDTH + tx;
+    int offsetB = q * BLOCK_WIDTH + ty;
+    int threadTargetIdxA = row * WIDTH + q * BLOCK_WIDTH + tx;
+    int threadTargetIdxB = (q * BLOCK_WIDTH + ty) * WIDTH + col;
+    // if (tx == 0 && ty == 0 && bx < 3 && by < 3)
+    //   printf("Kernel offsets A %d, %d | B %d, %d\n", row, offsetA, col, offsetB);
+
+    // handle halo cells
+    if (row < WIDTH && offsetA < WIDTH)
+      stA[ty][tx] = A[threadTargetIdxA];
+    else {
+      //printf("Kernel A halo at thread %dx%d\n", tx, ty);
+      stA[ty][tx] = 0;
+    }
+
+    if (offsetB < WIDTH && col < WIDTH )
+      stB[ty][tx] = B[threadTargetIdxB];
+    else {
+      //printf("Kernel B halo at thread %dx%d\n", tx, ty);
+      stB[ty][tx] = 0;
+    }
+    __syncthreads();
+    
+    // Phase 2: compute matrix mul with smaller subunit matricies
+    
+    if (col < numCColumns && row < numCRows) {
+      for (int i = 0; i < BLOCK_WIDTH; i++) {
+        result += stA[ty][i] * stB[i][tx];
+      }
+    }
+    __syncthreads();
   }
-  C[IDX_2D(x, y, numCColumns)] = result;
+  
+  if (col < numCColumns && row < numCRows) {
+    C[IDX_2D(col, row, numCColumns)] = result;
+  }
 }
 
 int main(int argc, char **argv) {
@@ -100,6 +142,8 @@ int main(int argc, char **argv) {
     1
   );
   dim3 DimBlock(BLOCK_WIDTH, BLOCK_WIDTH, 1);
+  wbLog(TRACE, "The dimensions of DimGrid are ", DimGrid.x, " x ", DimGrid.y, " x ", DimGrid.z);
+  wbLog(TRACE, "The dimensions of DimBlock are ", DimBlock.x, " x ", DimBlock.y, " x ", DimBlock.z);
 
   wbTime_start(Compute, "Performing CUDA computation");
   //@@ Launch the GPU Kernel here
