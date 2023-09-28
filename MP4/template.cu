@@ -19,13 +19,50 @@
 #define MASK_RADIUS (MASK_WIDTH / 2)
 #define BLOCK_WIDTH (TILE_WIDTH + (MASK_WIDTH - 1))
 
-__constant__ float Mc[MASK_WIDTH][MASK_WIDTH][MASK_WIDTH];
-
 //@@ Define constant memory for device kernel here
+__constant__ float Mc[MASK_WIDTH][MASK_WIDTH][MASK_WIDTH];
 
 __global__ void conv3d(float *input, float *output, const int z_size,
                        const int y_size, const int x_size) {
   //@@ Insert kernel code here
+  __shared__ float tile[BLOCK_WIDTH][BLOCK_WIDTH][BLOCK_WIDTH];
+
+  int tx = threadIdx.x;
+  int ty = threadIdx.y;
+  int tz = threadIdx.z;
+
+  int z_o = blockIdx.z * TILE_WIDTH + tz;
+  int y_o = blockIdx.y * TILE_WIDTH + ty;
+  int x_o = blockIdx.x * TILE_WIDTH + tx;
+
+  int z_i = z_o - MASK_RADIUS;
+  int y_i = y_o - MASK_RADIUS;
+  int x_i = x_o - MASK_RADIUS;
+
+  int Width = TILE_WIDTH;
+
+  float result = 0;
+  if( (x_i >= 0) && (x_i < Width) &&
+      (z_i >= 0) && (z_i < Width) &&
+      (y_i >= 0) && (y_i < Width)) {
+    tile[tz][ty][tx] = input[x_i*Width*Width + y_i*Width + z_i];
+  } else {
+    tile[tz][ty][tx] = 0;
+  }
+  __syncthreads();
+
+  if (ty < TILE_WIDTH && tx < TILE_WIDTH) {
+    for (int i = 0; i < MASK_WIDTH; i++) {
+      for (int j = 0; j < MASK_WIDTH; j++) {
+        for (int k = 0; k < MASK_WIDTH; k++) {
+          result += Mc[i][j][k] * tile[i+ty][j+tx][k+tz];
+        }
+      }
+    }
+    if (y_o < Width && x_o < Width && z_o < Width) {
+      output[y_o * Width * Width + x_o * Width + z_o] = result;
+    }
+  }
 }
 
 int main(int argc, char *argv[]) {
