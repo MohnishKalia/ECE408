@@ -11,6 +11,15 @@
   } while (0)
 
 //@@ Define any useful program-wide constants here
+// helper for computing malloc size
+#define DATA_SIZE(inputLen) (inputLen * sizeof(float))
+// consts
+#define TILE_WIDTH (8)
+#define MASK_WIDTH (3)
+#define MASK_RADIUS (MASK_WIDTH / 2)
+#define BLOCK_WIDTH (TILE_WIDTH + (MASK_WIDTH - 1))
+
+__constant__ float Mc[MASK_WIDTH][MASK_WIDTH][MASK_WIDTH];
 
 //@@ Define constant memory for device kernel here
 
@@ -53,6 +62,8 @@ int main(int argc, char *argv[]) {
   //@@ Allocate GPU memory here
   // Recall that inputLength is 3 elements longer than the input data
   // because the first  three elements were the dimensions
+  wbCheck(cudaMalloc((void **)&deviceInput, DATA_SIZE(inputLength - 3)));
+  wbCheck(cudaMalloc((void **)&deviceOutput, DATA_SIZE(inputLength)));
   wbTime_stop(GPU, "Doing GPU memory allocation");
 
   wbTime_start(Copy, "Copying data to the GPU");
@@ -60,12 +71,30 @@ int main(int argc, char *argv[]) {
   // Recall that the first three elements of hostInput are dimensions and
   // do
   // not need to be copied to the gpu
+  wbCheck(cudaMemcpy(deviceInput, (hostInput + 3), DATA_SIZE(inputLength - 3), cudaMemcpyHostToDevice));
+  wbCheck(cudaMemcpyToSymbol(Mc, hostKernel, DATA_SIZE(kernelLength)));
+  // // kernel check
+  // for (size_t i = 0; i < kernelLength; i++)
+  //   wbLog(TRACE, "", *(hostKernel + i));
   wbTime_stop(Copy, "Copying data to the GPU");
 
   wbTime_start(Compute, "Doing the computation on the GPU");
   //@@ Initialize grid and block dimensions here
+  dim3 DimGrid(
+    ceil(x_size/(1.0*TILE_WIDTH)),
+    ceil(y_size/(1.0*TILE_WIDTH)),
+    ceil(z_size/(1.0*TILE_WIDTH))
+  );
+  dim3 DimBlock(
+    BLOCK_WIDTH,
+    BLOCK_WIDTH,
+    BLOCK_WIDTH
+  );
+  wbLog(TRACE, "The DimGrid is ", DimGrid.x, "x", DimGrid.y, "x", DimGrid.z);
+  wbLog(TRACE, "The DimBlock is ", DimBlock.x, "x", DimBlock.y, "x", DimBlock.z);
 
   //@@ Launch the GPU kernel here
+  conv3d<<<DimGrid, DimBlock>>>(deviceInput, deviceOutput, z_size, y_size, x_size);
   cudaDeviceSynchronize();
   wbTime_stop(Compute, "Doing the computation on the GPU");
 
@@ -73,6 +102,7 @@ int main(int argc, char *argv[]) {
   //@@ Copy the device memory back to the host here
   // Recall that the first three elements of the output are the dimensions
   // and should not be set here (they are set below)
+  wbCheck(cudaMemcpy((hostOutput + 3), deviceOutput, DATA_SIZE(inputLength - 3), cudaMemcpyDeviceToHost));
   wbTime_stop(Copy, "Copying data from the GPU");
 
   wbTime_stop(GPU, "Doing GPU Computation (memory + compute)");
