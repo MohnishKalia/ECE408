@@ -12,7 +12,7 @@
 
 //@@ Define any useful program-wide constants here
 // helper for computing malloc size
-#define DATA_SIZE(inputLen) (inputLen * sizeof(float))
+#define DATA_SIZE(inputLen) ((inputLen) * sizeof(float))
 // consts
 #define TILE_WIDTH (8)
 #define MASK_WIDTH (3)
@@ -39,21 +39,22 @@ __global__ void conv3d(float *input, float *output, const int z_size,
   int y_i = y_o - MASK_RADIUS;
   int x_i = x_o - MASK_RADIUS;
 
-                                    // y_size or x_size
   int index_i = z_i*x_size*y_size + y_i*x_size + x_i;
   int index_o = z_o*x_size*y_size + y_o*x_size + x_o;
 
-  if( (x_i >= 0) && (x_i < x_size) &&
-      (z_i >= 0) && (z_i < z_size) &&
-      (y_i >= 0) && (y_i < y_size)) {
+  if ((x_i >= 0 && x_i < x_size) &&
+      (y_i >= 0 && y_i < y_size) &&
+      (z_i >= 0 && z_i < z_size)
+  ) {
     tile[tz][ty][tx] = input[index_i];
   } else {
     tile[tz][ty][tx] = 0;
   }
+
   __syncthreads();
 
   float result = 0;
-  if (ty < TILE_WIDTH && tx < TILE_WIDTH) {
+  if (ty < TILE_WIDTH && tx < TILE_WIDTH && tz < TILE_WIDTH) {
     for (int k = 0; k < MASK_WIDTH; k++) {
       for (int j = 0; j < MASK_WIDTH; j++) {
         for (int i = 0; i < MASK_WIDTH; i++) {
@@ -62,8 +63,6 @@ __global__ void conv3d(float *input, float *output, const int z_size,
       }
     }
     if (x_o < x_size && y_o < y_size && z_o < z_size) {
-      // something here is oob
-      //int test = result + 1;
       output[index_o] = result;
     }
   }
@@ -112,11 +111,9 @@ int main(int argc, char *argv[]) {
   // Recall that the first three elements of hostInput are dimensions and
   // do
   // not need to be copied to the gpu
+  wbLog(TRACE, "(Data) Size: ", DATA_SIZE(inputLength - 3), " B, ", inputLength - 3, " elts");
   wbCheck(cudaMemcpy(deviceInput, (hostInput + 3), DATA_SIZE(inputLength - 3), cudaMemcpyHostToDevice));
   wbCheck(cudaMemcpyToSymbol(Mc, hostKernel, DATA_SIZE(kernelLength)));
-  // // kernel check
-  // for (size_t i = 0; i < kernelLength; i++)
-  //   wbLog(TRACE, "", *(hostKernel + i));
   wbTime_stop(Copy, "Copying data to the GPU");
 
   wbTime_start(Compute, "Doing the computation on the GPU");
