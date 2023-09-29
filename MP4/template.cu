@@ -39,28 +39,32 @@ __global__ void conv3d(float *input, float *output, const int z_size,
   int y_i = y_o - MASK_RADIUS;
   int x_i = x_o - MASK_RADIUS;
 
-  int Width = TILE_WIDTH;
+                                    // y_size or x_size
+  int index_i = z_i*x_size*y_size + y_i*x_size + x_i;
+  int index_o = z_o*x_size*y_size + y_o*x_size + x_o;
 
-  float result = 0;
-  if( (x_i >= 0) && (x_i < Width) &&
-      (z_i >= 0) && (z_i < Width) &&
-      (y_i >= 0) && (y_i < Width)) {
-    tile[tz][ty][tx] = input[x_i*Width*Width + y_i*Width + z_i];
+  if( (x_i >= 0) && (x_i < x_size) &&
+      (z_i >= 0) && (z_i < z_size) &&
+      (y_i >= 0) && (y_i < y_size)) {
+    tile[tz][ty][tx] = input[index_i];
   } else {
     tile[tz][ty][tx] = 0;
   }
   __syncthreads();
 
+  float result = 0;
   if (ty < TILE_WIDTH && tx < TILE_WIDTH) {
-    for (int i = 0; i < MASK_WIDTH; i++) {
+    for (int k = 0; k < MASK_WIDTH; k++) {
       for (int j = 0; j < MASK_WIDTH; j++) {
-        for (int k = 0; k < MASK_WIDTH; k++) {
-          result += Mc[i][j][k] * tile[i+ty][j+tx][k+tz];
+        for (int i = 0; i < MASK_WIDTH; i++) {
+          result += Mc[k][j][i] * tile[k+tz][j+ty][i+tx];
         }
       }
     }
-    if (y_o < Width && x_o < Width && z_o < Width) {
-      output[y_o * Width * Width + x_o * Width + z_o] = result;
+    if (x_o < x_size && y_o < y_size && z_o < z_size) {
+      // something here is oob
+      //int test = result + 1;
+      output[index_o] = result;
     }
   }
 }
@@ -100,7 +104,7 @@ int main(int argc, char *argv[]) {
   // Recall that inputLength is 3 elements longer than the input data
   // because the first  three elements were the dimensions
   wbCheck(cudaMalloc((void **)&deviceInput, DATA_SIZE(inputLength - 3)));
-  wbCheck(cudaMalloc((void **)&deviceOutput, DATA_SIZE(inputLength)));
+  wbCheck(cudaMalloc((void **)&deviceOutput, DATA_SIZE(inputLength - 3)));
   wbTime_stop(GPU, "Doing GPU memory allocation");
 
   wbTime_start(Copy, "Copying data to the GPU");
@@ -127,8 +131,8 @@ int main(int argc, char *argv[]) {
     BLOCK_WIDTH,
     BLOCK_WIDTH
   );
-  wbLog(TRACE, "The DimGrid is ", DimGrid.x, "x", DimGrid.y, "x", DimGrid.z);
-  wbLog(TRACE, "The DimBlock is ", DimBlock.x, "x", DimBlock.y, "x", DimBlock.z);
+  wbLog(TRACE, "The DimGrid is ", DimGrid.z, "x", DimGrid.y, "x", DimGrid.x);
+  wbLog(TRACE, "The DimBlock is ", DimBlock.z, "x", DimBlock.y, "x", DimBlock.x);
 
   //@@ Launch the GPU kernel here
   conv3d<<<DimGrid, DimBlock>>>(deviceInput, deviceOutput, z_size, y_size, x_size);
