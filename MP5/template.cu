@@ -86,8 +86,7 @@ int main(int argc, char **argv) {
   wbTime_stop(GPU, "Copying input memory to the GPU.");
   //@@ Initialize the grid and block dimensions here
   dim3 DimBlock(BLOCK_SIZE, 1, 1);
-  dim3 DimGrid(numInputElements / DimBlock.x, 1, 1);
-  if (numInputElements % DimBlock.x != 0) DimGrid.x++;
+  dim3 DimGrid(numOutputElements, 1, 1);
 
   wbLog(TRACE, "The block size is ", DimBlock.x, " and the # of blocks is ", DimGrid.x);
 
