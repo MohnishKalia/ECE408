@@ -23,6 +23,7 @@ __global__ void finish_scan(float *input, float *output, int len, float* blockSu
   int tx = threadIdx.x;
   int i = 2 * BLOCK_SIZE * bx + tx;
 
+  // apply block sum to elements shifted over one block in block sum arr
   int blockSum = 0;
   if (bx-1 >= 0)
     blockSum = blockSumInput[bx-1];
@@ -37,6 +38,7 @@ __global__ void scan(float *input, float *output, int len) {
   //@@ function and call them from the host
   __shared__ float T[2*BLOCK_SIZE];
 
+  // load into shared memory
   int i = 2 * BLOCK_SIZE * blockIdx.x + threadIdx.x;
   if (i < len) 
     T[threadIdx.x] = input[i];
@@ -69,6 +71,7 @@ __global__ void scan(float *input, float *output, int len) {
   }
   __syncthreads();
 
+  // write shared memory back to output
   if (i < len) 
     output[i] = T[threadIdx.x];
 }
@@ -128,12 +131,13 @@ int main(int argc, char **argv) {
   float *h_blockSumInput = (float *)malloc(numOfBlockSums * sizeof(float));
   float *h_blockSumOutput = (float *)malloc(numOfBlockSums * sizeof(float));
 
+  // pick out block sum elements into host array
   for (int i = 0; i < numOfBlockSums; i++) {
     int targetIdx = (i+1) * DimBlock.x - 1;
     if (targetIdx > numElements-1) 
       targetIdx = numElements-1;
     h_blockSumInput[i] = hostOutput[targetIdx];
-    wbLog(TRACE, "BSI[", i, "] = ", h_blockSumInput[i], " //", targetIdx);
+    // wbLog(TRACE, "BSI[", i, "] = ", h_blockSumInput[i], " //", targetIdx);
   }
 
   float *d_blockSumInput;
@@ -155,12 +159,11 @@ int main(int argc, char **argv) {
   cudaFree(deviceInput);
   cudaFree(deviceOutput);
 
-  for (int i = 0; i < numOfBlockSums; i++) {
-    wbLog(TRACE, "BSO[", i, "] = ", h_blockSumOutput[i]);
-  }
+  // for (int i = 0; i < numOfBlockSums; i++) {
+  //   wbLog(TRACE, "BSO[", i, "] = ", h_blockSumOutput[i]);
+  // }
 
   // post scan procedure
-  // TODO: Maybe check for correctness with references
   wbCheck(cudaMalloc((void **)&deviceInput, numElements * sizeof(float)));
   wbCheck(cudaMalloc((void **)&deviceOutput, numElements * sizeof(float)));
   wbCheck(cudaMemset(deviceOutput, 0, numElements * sizeof(float)));
@@ -170,8 +173,10 @@ int main(int argc, char **argv) {
   wbCheck(cudaMemcpy(d_blockSumInput, h_blockSumOutput, numOfBlockSums * sizeof(float),
                     cudaMemcpyHostToDevice));
   finish_scan<<<DimGrid, DimBlock>>>(deviceInput, deviceOutput, numElements, d_blockSumInput, numOfBlockSums);
-  
+  cudaDeviceSynchronize();
+
   // free referenced block sum memory
+  cudaFree(d_blockSumInput);
   free(h_blockSumInput);
   free(h_blockSumOutput);
 
