@@ -38,8 +38,21 @@ __global__ void conv_forward_kernel(float *output, const float *input, const flo
 
     // Insert your GPU convolution kernel code here
 
+    int TILE_WIDTH = 16;
+    int W_size = ceil(1.0f*W_out/TILE_WIDTH); // number of horizontal tiles per output map
+    int H_size = ceil(1.0f*H_out/TILE_WIDTH); // number of vertical tiles per output map
+    int b = blockIdx.z;
+    int m = blockIdx.x;
+    int h = (blockIdx.y / W_size) * TILE_WIDTH + threadIdx.y;
+    int w = (blockIdx.y % W_size) * TILE_WIDTH + threadIdx.x;
 
-
+    float acc = 0.0f;
+    for (int c = 0; c < C; c++) { // sum over all input channels
+        for (int p = 0; p < K; p++) // loop over KxK filter
+            for (int q = 0; q < K; q++)
+                acc += in_4d(b, c, (h + p), (w + q)) * mask_4d(m, c, p, q);
+    }
+    out_4d(b, m, h, w) = acc;
 
     #undef out_4d
     #undef in_4d
@@ -61,26 +74,81 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_output, co
     //     std::cout<<"CUDA error: "<<cudaGetErrorString(error)<<std::endl;
     //     exit(-1);
     // }
-   
+
+    #define wbCheck(stmt)                                                     \
+    do {                                                                    \
+        cudaError_t err = stmt;                                               \
+        if (err != cudaSuccess) {                                             \
+            std::cout<<"Failed to run stmt: "<<#stmt<<std::endl;    \
+            std::cout<<"CUDA error: "<<cudaGetErrorString(err)<<std::endl;    \
+            exit(-1);                                                         \
+        }                                                                     \
+    } while (0)
+
+    const int H_out = (H - K)/S + 1;
+    const int W_out = (W - K)/S + 1;
+
+    size_t dop_sz = B * M * H_out * W_out * sizeof(float);
+    size_t dip_sz = B * C * H * W * sizeof(float);
+    size_t dmp_sz = K * K * sizeof(float);
+    wbCheck(cudaMalloc((void **)device_output_ptr, dop_sz));
+    wbCheck(cudaMalloc((void **)device_input_ptr, dip_sz));
+    wbCheck(cudaMalloc((void **)device_mask_ptr, dmp_sz));
+
+    // wbCheck(cudaMemcpy(*device_output_ptr, host_output, dop_sz, cudaMemcpyHostToDevice));
+    wbCheck(cudaMemcpy(*device_input_ptr, host_input, dip_sz, cudaMemcpyHostToDevice));
+    wbCheck(cudaMemcpy(*device_mask_ptr, host_mask, dmp_sz, cudaMemcpyHostToDevice));
+
+    #undef wbCheck
 }
 
 
 __host__ void GPUInterface::conv_forward_gpu(float *device_output, const float *device_input, const float *device_mask, const int B, const int M, const int C, const int H, const int W, const int K, const int S)
 {
     // Set the kernel dimensions and call the kernel
-    
 
+    int TILE_WIDTH = 16;
+    const int H_out = (H - K)/S + 1;
+    const int W_out = (W - K)/S + 1;
+    int W_size = ceil(1.0f*W_out/TILE_WIDTH); // number of horizontal tiles per output map
+    int H_size = ceil(1.0f*H_out/TILE_WIDTH); // number of vertical tiles per output map
+    int tileNums = H_size * W_size; // total number of tiles per map
+    dim3 DimBlock(TILE_WIDTH, TILE_WIDTH, 1); // output tile for untiled code
+    dim3 DimGrid(M, tileNums, B);
+    std::cout<<"DimBlock: "<<DimBlock.x<<"x"<<DimBlock.y<<"x"<<DimBlock.z<<std::endl;
+    std::cout<<"DimGrid: "<<DimGrid.x<<"x"<<DimGrid.y<<"x"<<DimGrid.z<<std::endl;
+    conv_forward_kernel<<<DimGrid, DimBlock>>>(device_output, device_input, device_mask, B, M, C, H, W, K, S);
+    cudaDeviceSynchronize();
 }
 
 
 __host__ void GPUInterface::conv_forward_gpu_epilog(float *host_output, float *device_output, float *device_input, float *device_mask, const int B, const int M, const int C, const int H, const int W, const int K, const int S)
 {
+
+    #define wbCheck(stmt)                                                     \
+    do {                                                                    \
+        cudaError_t err = stmt;                                               \
+        if (err != cudaSuccess) {                                             \
+            std::cout<<"Failed to run stmt: "<<#stmt<<std::endl;    \
+            std::cout<<"CUDA error: "<<cudaGetErrorString(err)<<std::endl;    \
+            exit(-1);                                                         \
+        }                                                                     \
+    } while (0)
+
+    const int H_out = (H - K)/S + 1;
+    const int W_out = (W - K)/S + 1;
+    size_t dop_sz = B * M * H_out * W_out * sizeof(float);
+
     // Copy the output back to host
+    wbCheck(cudaMemcpy(host_output, device_output, dop_sz, cudaMemcpyDeviceToHost));
 
    
     // Free device memory
-    
+    wbCheck(cudaFree(device_input));
+    wbCheck(cudaFree(device_output));
+    wbCheck(cudaFree(device_mask));
 
+    #undef wbCheck
 }
 
 
