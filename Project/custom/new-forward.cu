@@ -24,8 +24,6 @@ __global__ void conv_forward_kernel(float *output, const float *input, const flo
 
     const int H_out = (H - K)/S + 1;
     const int W_out = (W - K)/S + 1;
-    (void)H_out; // silence declared but never referenced warning. remove this line when you start working
-    (void)W_out; // silence declared but never referenced warning. remove this line when you start working
 
     // We have some nice #defs for you below to simplify indexing. Feel free to use them, or create your own.
     // An example use of these macros:
@@ -38,20 +36,35 @@ __global__ void conv_forward_kernel(float *output, const float *input, const flo
 
     // Insert your GPU convolution kernel code here
 
+    // same as grid setup
     int TILE_WIDTH = 16;
     int W_size = ceil(1.0f*W_out/TILE_WIDTH); // number of horizontal tiles per output map
     int H_size = ceil(1.0f*H_out/TILE_WIDTH); // number of vertical tiles per output map
     int b = blockIdx.z;
     int m = blockIdx.x;
-    int h = (blockIdx.y / W_size) * TILE_WIDTH + threadIdx.y;
-    int w = (blockIdx.y % W_size) * TILE_WIDTH + threadIdx.x;
+    int h = (blockIdx.y / W_size) * TILE_WIDTH + threadIdx.y; // target h of output
+    int w = (blockIdx.y % W_size) * TILE_WIDTH + threadIdx.x; // target w of output
+
+    // each thread ran should be within output bounds, otherwise return
+    if (w < 0 || w >= W_out || h < 0 || h >= H_out)
+        return;
 
     float acc = 0.0f;
     for (int c = 0; c < C; c++) { // sum over all input channels
-        for (int p = 0; p < K; p++) // loop over KxK filter
-            for (int q = 0; q < K; q++)
-                acc += in_4d(b, c, (h + p), (w + q)) * mask_4d(m, c, p, q);
+        for (int p = 0; p < K; p++) { // loop over KxK filter
+            for (int q = 0; q < K; q++) {
+                int h_idx = (h * S + p);
+                int w_idx = (w * S + q);
+                float val = 0.0f;
+                // if target idx is not within input bounds, use 0, otherwise grab value
+                if (!(w_idx < 0 || w_idx >= W || h_idx < 0 || h_idx >= H))
+                    val = in_4d(b, c, h_idx, w_idx);
+                acc += val * mask_4d(m, c, p, q);
+            }
+        }
     }
+
+    // after accumulating, set to output value
     out_4d(b, m, h, w) = acc;
 
     #undef out_4d
@@ -90,7 +103,7 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_output, co
 
     size_t dop_sz = B * M * H_out * W_out * sizeof(float);
     size_t dip_sz = B * C * H * W * sizeof(float);
-    size_t dmp_sz = K * K * sizeof(float);
+    size_t dmp_sz = M * C * K * K * sizeof(float);
     wbCheck(cudaMalloc((void **)device_output_ptr, dop_sz));
     wbCheck(cudaMalloc((void **)device_input_ptr, dip_sz));
     wbCheck(cudaMalloc((void **)device_mask_ptr, dmp_sz));
@@ -107,6 +120,7 @@ __host__ void GPUInterface::conv_forward_gpu(float *device_output, const float *
 {
     // Set the kernel dimensions and call the kernel
 
+    // same as inside kernel
     int TILE_WIDTH = 16;
     const int H_out = (H - K)/S + 1;
     const int W_out = (W - K)/S + 1;
