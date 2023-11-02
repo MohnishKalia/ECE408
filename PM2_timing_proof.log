@@ -1,0 +1,222 @@
+magnum [71M]: ~/source/repos/ECE408 [git:mkalia2]
+👾 > ./rai -p Project/
+Dynamic Rate Limit: 3m0s
+✱ Checking your authentication credentials.
+✱ Preparing your project directory for upload.
+✱ Uploading your project directory. This may take a few minutes.
+ 11.61 KiB / 11.61 KiB  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  100.00% 69.83 KiB/s 0s
+✱ Folder uploaded. Server is now processing your submission.
+✱ Your job request has been posted to the queue.
+✱ Server has accepted your job submission and started to configure the container.
+✱ Downloading your code.
+✱ Using davidchencsl/ece408_minidnn_docker_fa23:latest as container image.
+✱ Starting container.
+✱ Running /bin/bash -c "mkdir /build/student_code && cp -rv /src/* /build/student_code"
+'/src/README.md' -> '/build/student_code/README.md'
+'/src/custom' -> '/build/student_code/custom'
+'/src/custom/cpu-new-forward.cc' -> '/build/student_code/custom/cpu-new-forward.cc'
+'/src/custom/cpu-new-forward.h' -> '/build/student_code/custom/cpu-new-forward.h'
+'/src/custom/gpu-new-forward.h' -> '/build/student_code/custom/gpu-new-forward.h'
+'/src/custom/new-forward.cu' -> '/build/student_code/custom/new-forward.cu'
+'/src/m1.cc' -> '/build/student_code/m1.cc'
+'/src/m2.cc' -> '/build/student_code/m2.cc'
+'/src/rai_build.yml' -> '/build/student_code/rai_build.yml'
+✱ Running /bin/bash -c "cp /ece408/project/build/weights-86.bin /build"
+✱ Running /bin/bash -c "cp -rv /src/custom/* /ece408/project/src/layer/custom"
+'/src/custom/cpu-new-forward.cc' -> '/ece408/project/src/layer/custom/cpu-new-forward.cc'
+'/src/custom/cpu-new-forward.h' -> '/ece408/project/src/layer/custom/cpu-new-forward.h'
+'/src/custom/gpu-new-forward.h' -> '/ece408/project/src/layer/custom/gpu-new-forward.h'
+'/src/custom/new-forward.cu' -> '/ece408/project/src/layer/custom/new-forward.cu'
+✱ Running /bin/bash -c "cmake  /ece408/project/ && make -j8"
+-- The C compiler identification is GNU 7.5.0
+-- The CXX compiler identification is GNU 7.5.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Looking for pthread.h
+-- Looking for pthread.h - found
+-- Looking for pthread_create
+-- Looking for pthread_create - not found
+-- Looking for pthread_create in pthreads
+-- Looking for pthread_create in pthreads - not found
+-- Looking for pthread_create in pthread
+-- Looking for pthread_create in pthread - found
+-- Found Threads: TRUE
+-- Found CUDA: /usr/local/cuda (found version "10.2")
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /build
+[  3%] Building NVCC (Device) object src/CMakeFiles/GpuConv.dir/layer/custom/GpuConv_generated_new-forward.cu.o
+Scanning dependencies of target ece408net
+[  6%] Building NVCC (Device) object src/CMakeFiles/GpuConv.dir/layer/custom/GpuConv_generated_gpu-utils.cu.o
+[  9%] Building CXX object CMakeFiles/ece408net.dir/ece408net.cc.o
+[ 12%] Linking CXX static library libece408net.a
+[ 12%] Built target ece408net
+Scanning dependencies of target GpuConv
+[ 16%] Linking CXX static library libGpuConv.a
+[ 16%] Built target GpuConv
+Scanning dependencies of target MiniDNNLib
+[ 19%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/fully_connected.cc.o
+[ 22%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/conv_cpu.cc.o
+[ 29%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/conv_cust.cc.o
+[ 29%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/conv.cc.o
+[ 35%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/ave_pooling.cc.o
+[ 35%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/mnist.cc.o
+[ 38%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/max_pooling.cc.o
+[ 41%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/network.cc.o
+[ 45%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/relu.cc.o
+[ 48%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/sigmoid.cc.o
+[ 51%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/softmax.cc.o
+[ 54%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/loss/cross_entropy_loss.cc.o
+[ 58%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/loss/mse_loss.cc.o
+[ 61%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/optimizer/sgd.cc.o
+[ 64%] Building CXX object src/CMakeFiles/MiniDNNLib.dir/layer/custom/cpu-new-forward.cc.o
+[ 67%] Linking CXX static library libMiniDNNLib.a
+[ 67%] Built target MiniDNNLib
+Scanning dependencies of target m1
+Scanning dependencies of target m3
+Scanning dependencies of target final
+Scanning dependencies of target m3_prof
+Scanning dependencies of target m2
+[ 70%] Building CXX object CMakeFiles/m1.dir/m1.cc.o
+[ 74%] Building CXX object CMakeFiles/final.dir/final.cc.o
+[ 77%] Building CXX object CMakeFiles/m3_prof.dir/m3_prof.cc.o
+[ 80%] Building CXX object CMakeFiles/m3.dir/m3.cc.o
+[ 83%] Building CXX object CMakeFiles/m2.dir/m2.cc.o
+[ 87%] Linking CXX executable m3_prof
+[ 90%] Linking CXX executable m1
+[ 93%] Linking CXX executable final
+[ 96%] Linking CXX executable m2
+[100%] Linking CXX executable m3
+[100%] Built target m3_prof
+[100%] Built target m1
+[100%] Built target final
+[100%] Built target m2
+[100%] Built target m3
+✱ Running bash -c "time ./m2 100"   \\ Output will appear after run is complete.
+Running test case 1
+B = 1 M = 3 C = 3 H = 224 W = 224 K = 3 S = 1
+DimBlock: 16x16x1
+DimGrid: 3x196x1
+Running test case 2
+B = 2 M = 3 C = 3 H = 301 W = 301 K = 3 S = 2
+DimBlock: 16x16x1
+DimGrid: 3x100x2
+Running test case 3
+B = 3 M = 3 C = 3 H = 196 W = 196 K = 3 S = 3
+DimBlock: 16x16x1
+DimGrid: 3x25x3
+Running test case 4
+B = 4 M = 3 C = 3 H = 239 W = 239 K = 3 S = 4
+DimBlock: 16x16x1
+DimGrid: 3x16x4
+All test cases passed
+Test batch size: 100
+Loading fashion-mnist data...Done
+Loading model...Done
+Conv-GPU==
+DimBlock: 16x16x1
+DimGrid: 4x25x100
+Layer Time: 8.19815 ms
+Op Time: 0.268335 ms
+Conv-GPU==
+DimBlock: 16x16x1
+DimGrid: 16x9x100
+Layer Time: 6.78409 ms
+Op Time: 0.955373 ms
+
+Test Accuracy: 0.86
+
+
+real	0m1.715s
+user	0m1.429s
+sys	0m0.229s
+✱ Running bash -c "time ./m2 1000"   \\ Output will appear after run is complete.
+Running test case 1
+B = 1 M = 3 C = 3 H = 224 W = 224 K = 3 S = 1
+DimBlock: 16x16x1
+DimGrid: 3x196x1
+Running test case 2
+B = 2 M = 3 C = 3 H = 301 W = 301 K = 3 S = 2
+DimBlock: 16x16x1
+DimGrid: 3x100x2
+Running test case 3
+B = 3 M = 3 C = 3 H = 196 W = 196 K = 3 S = 3
+DimBlock: 16x16x1
+DimGrid: 3x25x3
+Running test case 4
+B = 4 M = 3 C = 3 H = 239 W = 239 K = 3 S = 4
+DimBlock: 16x16x1
+DimGrid: 3x16x4
+All test cases passed
+Test batch size: 1000
+Loading fashion-mnist data...Done
+Loading model...Done
+Conv-GPU==
+DimBlock: 16x16x1
+DimGrid: 4x25x1000
+Layer Time: 73.5904 ms
+Op Time: 2.41532 ms
+Conv-GPU==
+DimBlock: 16x16x1
+DimGrid: 16x9x1000
+Layer Time: 60.5622 ms
+Op Time: 9.17231 ms
+
+Test Accuracy: 0.886
+
+
+real	0m10.651s
+user	0m10.234s
+sys	0m0.376s
+✱ Running bash -c "time ./m2 10000"   \\ Output will appear after run is complete.
+Running test case 1
+B = 1 M = 3 C = 3 H = 224 W = 224 K = 3 S = 1
+DimBlock: 16x16x1
+DimGrid: 3x196x1
+Running test case 2
+B = 2 M = 3 C = 3 H = 301 W = 301 K = 3 S = 2
+DimBlock: 16x16x1
+DimGrid: 3x100x2
+Running test case 3
+B = 3 M = 3 C = 3 H = 196 W = 196 K = 3 S = 3
+DimBlock: 16x16x1
+DimGrid: 3x25x3
+Running test case 4
+B = 4 M = 3 C = 3 H = 239 W = 239 K = 3 S = 4
+DimBlock: 16x16x1
+DimGrid: 3x16x4
+All test cases passed
+Test batch size: 10000
+Loading fashion-mnist data...Done
+Loading model...Done
+Conv-GPU==
+DimBlock: 16x16x1
+DimGrid: 4x25x10000
+Layer Time: 708.231 ms
+Op Time: 23.8422 ms
+Conv-GPU==
+DimBlock: 16x16x1
+DimGrid: 16x9x10000
+Layer Time: 578.468 ms
+Op Time: 91.3019 ms
+
+Test Accuracy: 0.8714
+
+
+real	1m40.466s
+user	1m38.648s
+sys	0m1.836s
+✱ The build folder has been uploaded to http://s3.amazonaws.com/files.rai-project.com/userdata/build-65431256dbc251598ce7f4f3.tar.gz. The data will be present for only a short duration of time.
+
+magnum [71M]: ~/source/repos/ECE408 [git:mkalia2]
+👾 >
