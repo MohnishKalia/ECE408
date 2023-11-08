@@ -28,18 +28,25 @@ void uchar_convert(float *input, unsigned char *output, int size)
 __global__
 void grayscale_convert(unsigned char *input, unsigned char *output, int width, int height, int channels)
 {
-  int j = threadIdx.x + blockIdx.x * blockDim.x;
   int i = threadIdx.y + blockIdx.y * blockDim.y;
+  int j = threadIdx.x + blockIdx.x * blockDim.x;
 
   int idx = i * width + j;
+  int max_size = width * height;
+  
+  // if (i == 0 && j < 3)
+  //   printf("  kernel:: for idx %d (%d, %d)\n", idx, i, j);
 
-  if (i < width && j < height) {
+  if (idx < max_size && i < height && j < width) {
     // channels must be 3
 		unsigned char r = input[channels*idx];
 		unsigned char g = input[channels*idx + 1];
 		unsigned char b = input[channels*idx + 2];
 		output[idx] = (unsigned char) (0.21*r + 0.71*g + 0.07*b);
   }
+
+  // if (i == 0 && j < 3)    
+  //   printf("kernel:: output[%d] = %u\n", idx, output[idx]);
 }
 
 __global__
@@ -99,16 +106,15 @@ int main(int argc, char **argv) {
   wbLog(TRACE, "The k1_DimGrid is ", k1_DimGrid.z, "x", k1_DimGrid.y, "x", k1_DimGrid.x);
   wbLog(TRACE, "The k1_DimBlock is ", k1_DimBlock.z, "x", k1_DimBlock.y, "x", k1_DimBlock.x);
   uchar_convert<<<k1_DimGrid, k1_DimBlock>>>(d_flt_k1_InputImageData, d_uch_k1_OutputImageData, uchar_convert_size);
-  cudaDeviceSynchronize();
+  wbCheck(cudaDeviceSynchronize());
   wbCheck(cudaMemcpy(h_uch_k1_OutputImageData, d_uch_k1_OutputImageData, uchar_convert_size * sizeof(unsigned char),
                      cudaMemcpyDeviceToHost));
   wbCheck(cudaFree(d_flt_k1_InputImageData));
   wbCheck(cudaFree(d_uch_k1_OutputImageData));
   wbLog(TRACE, "finished Kernel 1: uchar_convert");
 
-  for (int i = 0; i < 9; i++)
-    printf("uchar[%d] = %u\n", i, h_uch_k1_OutputImageData[i]);
-    // wbLog(TRACE, "uchar[", i, "] = ", h_uch_k1_OutputImageData[i]);
+  // for (int i = 0; i < 9; i++)
+  //   printf("uchar[%d] = %u\n", i, h_uch_k1_OutputImageData[i]);
 
   // Kernel 2: grayscale_convert
   wbLog(TRACE, "starting Kernel 2: grayscale_convert");
@@ -121,12 +127,12 @@ int main(int argc, char **argv) {
 
   wbCheck(cudaMemcpy(d_uch_k2_InputImageData, h_uch_k1_OutputImageData, uchar_convert_size * sizeof(unsigned char),
                      cudaMemcpyHostToDevice));
-  dim3 k2_DimBlock(256, 256, 1);
+  dim3 k2_DimBlock(32, 32, 1);
   dim3 k2_DimGrid(ceil(1.0*imageWidth/k2_DimBlock.x), ceil(1.0*imageHeight/k2_DimBlock.y), 1);
   wbLog(TRACE, "The k2_DimGrid is ", k2_DimGrid.z, "x", k2_DimGrid.y, "x", k2_DimGrid.x);
   wbLog(TRACE, "The k2_DimBlock is ", k2_DimBlock.z, "x", k2_DimBlock.y, "x", k2_DimBlock.x);
   grayscale_convert<<<k2_DimGrid, k2_DimBlock>>>(d_uch_k2_InputImageData, d_uch_k2_OutputImageData, imageWidth, imageHeight, imageChannels);
-  cudaDeviceSynchronize();
+  wbCheck(cudaDeviceSynchronize());
   wbCheck(cudaMemcpy(h_uch_k2_OutputImageData, d_uch_k2_OutputImageData, grayscale_convert_out_size * sizeof(unsigned char),
                      cudaMemcpyDeviceToHost));
   wbCheck(cudaFree(d_uch_k2_InputImageData));
@@ -134,9 +140,8 @@ int main(int argc, char **argv) {
   free(h_uch_k1_OutputImageData);
   wbLog(TRACE, "finished Kernel 2: grayscale_convert");
 
-  for (int i = 0; i < 9; i++)
-    printf("grayscale[%d] = %u\n", i, h_uch_k2_OutputImageData[i]);
-    // wbLog(TRACE, "grayscale[", i, "] = ", h_uch_k2_OutputImageData[i]);
+  // for (int i = 0; i < 9; i++)
+  //   printf("grayscale[%d] = %u\n", i, h_uch_k2_OutputImageData[i]);
 
   // Kernel 3: histo_kernel
   wbLog(TRACE, "starting Kernel 3: histo_kernel");
@@ -153,7 +158,7 @@ int main(int argc, char **argv) {
   wbLog(TRACE, "The k3_DimGrid is ", k3_DimGrid.z, "x", k3_DimGrid.y, "x", k3_DimGrid.x);
   wbLog(TRACE, "The k3_DimBlock is ", k3_DimBlock.z, "x", k3_DimBlock.y, "x", k3_DimBlock.x);
   histo_kernel<<<k3_DimGrid, k3_DimBlock>>>(d_uch_k3_InputImageData, grayscale_convert_out_size, d_uint_k3_OutputHistogram);
-  cudaDeviceSynchronize();
+  wbCheck(cudaDeviceSynchronize());
   wbCheck(cudaMemcpy(h_uint_k3_OutputHistogram, d_uint_k3_OutputHistogram, HISTOGRAM_LENGTH * sizeof(unsigned int),
                      cudaMemcpyDeviceToHost));
   wbCheck(cudaFree(d_uch_k3_InputImageData));
@@ -161,8 +166,8 @@ int main(int argc, char **argv) {
   free(h_uch_k2_OutputImageData); // needed ???
   wbLog(TRACE, "finished Kernel 3: histo_kernel");
 
-  for (int i = 30; i < 36; i++)
-    wbLog(TRACE, "histo[", i, "] = ", h_uint_k3_OutputHistogram[i]);
+  // for (int i = 30; i < 36; i++)
+  //   wbLog(TRACE, "histo[", i, "] = ", h_uint_k3_OutputHistogram[i]);
 
   wbSolution(args, outputImage);
 
