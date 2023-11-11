@@ -61,9 +61,28 @@ void histo_kernel(unsigned char *buffer, int size, unsigned int *histo)
   int i = threadIdx.x + blockIdx.x * blockDim.x;
   int stride = blockDim.x * gridDim.x;
 
+  // note, this if technically isn't needed because have 256 threads/block anyways, but here in case of future increase
+  if (threadIdx.x < HISTOGRAM_LENGTH) {
+    // some threads try to zero out shared memory
+    histo_priv[threadIdx.x] = 0;
+  }
+
+  // all threads meetup here
+  __syncthreads();
+
+  // actual process of filling out shared memory
   while (i < size) {
-    atomicAdd(&(histo[buffer[i]]), 1);
+    atomicAdd(&(histo_priv[buffer[i]]), 1);
     i += stride;
+  }
+
+  // all threads contributed to histogram
+  __syncthreads();
+
+  // once again, only so many threads are going to help out with copying over shared mem to global mem
+  if (threadIdx.x < HISTOGRAM_LENGTH) {
+    // atomically though, no threads stepping over another
+    atomicAdd(&(histo[threadIdx.x]), histo_priv[threadIdx.x]);
   }
 }
 
@@ -192,7 +211,7 @@ int main(int argc, char **argv) {
   float *cdf = (float *) malloc(HISTOGRAM_LENGTH * sizeof(float));
   cdf[0] = p(h_uint_k3_OutputHistogram[0]);
   float cdfmin = cdf[0];
-  float cdfmax = cdf[HISTOGRAM_LENGTH - 1];
+  // float cdfmax = cdf[HISTOGRAM_LENGTH - 1];
   for (int i = 1; i < HISTOGRAM_LENGTH; i++) {
     cdf[i] = cdf[i - 1] + p(h_uint_k3_OutputHistogram[i]);
   }
@@ -208,7 +227,7 @@ int main(int argc, char **argv) {
   // }
 
 
-  wbLog(TRACE, "CDF: min=", cdfmin, ", max=", cdfmax);
+  // wbLog(TRACE, "CDF: min=", cdfmin, ", max=", cdfmax);
   // wbLog(TRACE, "Total CDF: ", cdfTotal, ", Total Histo: ", histoTotal);
 
   #undef p
