@@ -15,6 +15,11 @@
     }                                                                     \
   } while (0)
 
+__device__
+float custom_clamp(float x, float start, float end) {
+	return min(max(x, start), end);
+}
+
 __global__
 void uchar_convert(float *input, unsigned char *output, int size)
 {
@@ -52,12 +57,25 @@ void grayscale_convert(unsigned char *input, unsigned char *output, int width, i
 __global__
 void histo_kernel(unsigned char *buffer, int size, unsigned int *histo)
 {
+  __shared__ unsigned int histo_priv[HISTOGRAM_LENGTH];
   int i = threadIdx.x + blockIdx.x * blockDim.x;
   int stride = blockDim.x * gridDim.x;
 
   while (i < size) {
     atomicAdd(&(histo[buffer[i]]), 1);
     i += stride;
+  }
+}
+
+__global__
+void equ_kernel(unsigned char *input, float *output, float *cdf, float cdfmin, int size)
+{
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (i < size) {
+    unsigned char val = input[i];
+    unsigned char correct_color = custom_clamp(255.0*(cdf[val] - cdfmin)/(1.0 - cdfmin), 0.0, 255.0);
+    output[i] = (float) (correct_color/255.0);
   }
 }
 
@@ -137,7 +155,6 @@ int main(int argc, char **argv) {
                      cudaMemcpyDeviceToHost));
   wbCheck(cudaFree(d_uch_k2_InputImageData));
   wbCheck(cudaFree(d_uch_k2_OutputImageData));
-  free(h_uch_k1_OutputImageData);
   wbLog(TRACE, "finished Kernel 2: grayscale_convert");
 
   // for (int i = 0; i < 9; i++)
@@ -168,6 +185,65 @@ int main(int argc, char **argv) {
 
   // for (int i = 30; i < 36; i++)
   //   wbLog(TRACE, "histo[", i, "] = ", h_uint_k3_OutputHistogram[i]);
+
+  // Find CDF
+  #define p(x) (1.0*x / grayscale_convert_out_size)
+
+  float *cdf = (float *) malloc(HISTOGRAM_LENGTH * sizeof(float));
+  cdf[0] = p(h_uint_k3_OutputHistogram[0]);
+  float cdfmin = cdf[0];
+  float cdfmax = cdf[HISTOGRAM_LENGTH - 1];
+  for (int i = 1; i < HISTOGRAM_LENGTH; i++) {
+    cdf[i] = cdf[i - 1] + p(h_uint_k3_OutputHistogram[i]);
+  }
+
+
+  // float cdfTotal = 0;
+  // unsigned int histoTotal = 0;
+  // printf("Histo:\n");
+  // for (int i = 0; i < HISTOGRAM_LENGTH; i++) {
+  //   cdfTotal += cdf[i];
+  //   histoTotal += h_uint_k3_OutputHistogram[i];
+  //   printf("%u ", h_uint_k3_OutputHistogram[i]);
+  // }
+
+
+  wbLog(TRACE, "CDF: min=", cdfmin, ", max=", cdfmax);
+  // wbLog(TRACE, "Total CDF: ", cdfTotal, ", Total Histo: ", histoTotal);
+
+  #undef p
+
+  // Kernel 4: equ_kernel
+  wbLog(TRACE, "starting Kernel 4: equ_kernel");
+  unsigned char *d_uch_k4_InputImageData;
+  float *d_flt_k4_InputCDF;
+  float *d_flt_k4_OutputImageData;
+  // no host out var needed, using hostOutputImageData
+  wbCheck(cudaMalloc((void**) &d_uch_k4_InputImageData, uchar_convert_size * sizeof(unsigned char)));
+  wbCheck(cudaMalloc((void**) &d_flt_k4_InputCDF, HISTOGRAM_LENGTH * sizeof(float)));
+  wbCheck(cudaMalloc((void**) &d_flt_k4_OutputImageData, uchar_convert_size * sizeof(float)));
+  wbCheck(cudaMemcpy(d_uch_k4_InputImageData, h_uch_k1_OutputImageData, uchar_convert_size * sizeof(unsigned char),
+                     cudaMemcpyHostToDevice));
+  wbCheck(cudaMemcpy(d_flt_k4_InputCDF, cdf, HISTOGRAM_LENGTH * sizeof(float),
+                     cudaMemcpyHostToDevice));
+  dim3 k4_DimBlock(256, 1, 1);
+  dim3 k4_DimGrid(ceil(1.0*uchar_convert_size/k4_DimBlock.x), 1, 1);
+  wbLog(TRACE, "The k4_DimGrid is ", k4_DimGrid.z, "x", k4_DimGrid.y, "x", k4_DimGrid.x);
+  wbLog(TRACE, "The k4_DimBlock is ", k4_DimBlock.z, "x", k4_DimBlock.y, "x", k4_DimBlock.x);
+  equ_kernel<<<k4_DimGrid, k4_DimBlock>>>(d_uch_k4_InputImageData, d_flt_k4_OutputImageData, d_flt_k4_InputCDF, cdfmin, uchar_convert_size);
+  wbCheck(cudaDeviceSynchronize());
+  wbCheck(cudaMemcpy(hostOutputImageData, d_flt_k4_OutputImageData, uchar_convert_size * sizeof(float),
+                     cudaMemcpyDeviceToHost));
+  wbCheck(cudaFree(d_uch_k4_InputImageData));
+  wbCheck(cudaFree(d_flt_k4_InputCDF));
+  wbCheck(cudaFree(d_flt_k4_OutputImageData));
+  free(h_uch_k1_OutputImageData);
+  free(h_uint_k3_OutputHistogram);
+  free(cdf);
+  wbLog(TRACE, "finished Kernel 4: equ_kernel");
+
+  // if (imageWidth == 900 && imageHeight == 1203)
+  //   wbExport("outputimg.ppm", outputImage);
 
   wbSolution(args, outputImage);
 
