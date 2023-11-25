@@ -14,6 +14,18 @@ __global__ void spmvJDSKernel(float *out, int *matColStart, int *matCols,
                               int *matRowPerm, int *matRows,
                               float *matData, float *vec, int dim) {
   //@@ insert spmv kernel for jds format
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row < dim) {
+    float dot = 0;
+    unsigned int sec = 0;
+    // something here?
+    while ((matColStart[sec + 1] - matColStart[sec]) > row) {
+      int innerIdx = matColStart[sec] + row;
+      dot += matData[innerIdx] * vec[matCols[innerIdx]];
+      sec++;
+    }
+    out[matRowPerm[row]] = dot;
+  }
 }
 
 static void spmvJDS(float *out, int *matColStart, int *matCols,
@@ -21,6 +33,13 @@ static void spmvJDS(float *out, int *matColStart, int *matCols,
                     float *vec, int dim) {
 
   //@@ invoke spmv kernel for jds format
+  int blockSize = 64;
+  dim3 DimGrid(ceil(1.0f*dim/blockSize),1,1);
+  dim3 DimBlock(blockSize,1,1);
+
+  spmvJDSKernel<<<DimGrid, DimBlock>>>(out, matColStart, matCols,
+                              matRowPerm, matRows,
+                              matData, vec, dim);
 }
 
 int main(int argc, char **argv) {
