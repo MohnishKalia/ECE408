@@ -2,7 +2,9 @@
 #include <iostream>
 #include "gpu-new-forward.h"
 
-__global__ void stream_conv_forward_kernel(int streamNum, float *output, const float *input, const float *mask, const int B, const int M, const int C, const int H, const int W, const int K,const int S)
+#define TILE_WIDTH 17
+
+__global__ void conv_forward_kernel(const int streamNum, float * __restrict__ output, const float * __restrict__ input, const float * __restrict__ mask, const int B, const int M, const int C, const int H, const int W, const int K,const int S)
 {
     /*
     Modify this function to implement the forward pass described in Chapter 16.
@@ -37,7 +39,6 @@ __global__ void stream_conv_forward_kernel(int streamNum, float *output, const f
     // Insert your GPU convolution kernel code here
 
     // same as grid setup
-    int TILE_WIDTH = 16;
     int W_size = ceil(1.0f*W_out/TILE_WIDTH); // number of horizontal tiles per output map
     int H_size = ceil(1.0f*H_out/TILE_WIDTH); // number of vertical tiles per output map
     int b = blockIdx.z;
@@ -124,7 +125,6 @@ __host__ void GPUInterface::conv_forward_gpu(float *device_output, const float *
     // Set the kernel dimensions and call the kernel
 
     // same as inside kernel
-    int TILE_WIDTH = 16;
     const int H_out = (H - K)/S + 1;
     const int W_out = (W - K)/S + 1;
     int W_size = ceil(1.0f*W_out/TILE_WIDTH); // number of horizontal tiles per output map
@@ -144,7 +144,7 @@ __host__ void GPUInterface::conv_forward_gpu(float *device_output, const float *
     }
 
     for (int streamNum = 0; streamNum < NUM_STREAMS; streamNum++) {
-        stream_conv_forward_kernel<<<DimGrid, DimBlock, 0, streams[streamNum]>>>(streamNum, device_output, device_input, device_mask, B, M, C, H, W, K, S);
+        conv_forward_kernel<<<DimGrid, DimBlock, 0, streams[streamNum]>>>(streamNum, device_output, device_input, device_mask, B, M, C, H, W, K, S);
     }
 
     for (int streamNum = 0; streamNum < NUM_STREAMS; streamNum++) {
