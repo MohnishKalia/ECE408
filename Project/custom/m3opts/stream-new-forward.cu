@@ -118,6 +118,11 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_output, co
     wbCheck(cudaMalloc((void **)device_input_ptr, dip_sz));
     wbCheck(cudaMalloc((void **)device_mask_ptr, dmp_sz));
 
+    // register as pinned mem, not paged mem for GPU async transfers
+    cudaHostRegister((void *) host_output, dop_sz, 0);
+    cudaHostRegister((void *) host_input, dip_sz, 0);
+    cudaHostRegister((void *) host_mask, dmp_sz, 0);
+
     // async memcpy here, record event after done to signal before kernel
     wbCheck(cudaMemcpyAsync(*device_mask_ptr, host_mask, dmp_sz, cudaMemcpyHostToDevice, dms));
     cudaEventRecord(dme, dms);
@@ -179,6 +184,11 @@ __host__ void GPUInterface::conv_forward_gpu_prolog(const float *host_output, co
 
     cudaEventDestroy(dme);
     cudaStreamDestroy(dms);
+
+    cudaHostUnregister((void *) host_output);
+    cudaHostUnregister((void *) host_input);
+    cudaHostUnregister((void *) host_mask);
+
     // not needed because we sync after anyways
     // cudaDeviceSynchronize();
 
