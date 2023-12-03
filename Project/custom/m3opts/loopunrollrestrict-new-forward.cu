@@ -69,32 +69,36 @@ __global__ void conv_forward_kernel(float * __restrict__ output, const float * _
     } 
     else if (K <= 7)
     {
-        #define Q_UNROLL 4
+        // 3 is best in this K range from profiling included in report
+        #define Q_UNROLL 3
         // middling K value, get a few unroll ops
         for (int c = 0; c < C; c++) { // sum over all input channels
             for (int p = 0; p < K; p++) { // loop over KxK filter
-                // turn q into # of loop iters to target instead of just q
-                int qbnd = ceil(1.0f * K / Q_UNROLL);
-                for (int q = 0; q < qbnd; q++) {
-                    // calc q0..3 and w0..3
-                    int h_idx = (h * S + p);
-                    int q0 = q * Q_UNROLL + 0;
-                    int q1 = q * Q_UNROLL + 1;
-                    int q2 = q * Q_UNROLL + 2;
-                    int q3 = q * Q_UNROLL + 3;
-                    int w0_idx = (w * S + q0);
-                    int w1_idx = (w * S + q1);
-                    int w2_idx = (w * S + q2);
-                    int w3_idx = (w * S + q3);
-                    // if target idx is not within input bounds, or q# is too far, use 0, otherwise grab value
-                    if (!(w0_idx < 0 || w0_idx >= W || h_idx < 0 || h_idx >= H) && q0 < K)
-                        acc += in_4d(b, c, h_idx, w0_idx) * mask_4d(m, c, p, q0);
-                    if (!(w1_idx < 0 || w1_idx >= W || h_idx < 0 || h_idx >= H) && q1 < K)
-                        acc += in_4d(b, c, h_idx, w1_idx) * mask_4d(m, c, p, q1);
-                    if (!(w2_idx < 0 || w2_idx >= W || h_idx < 0 || h_idx >= H) && q2 < K)
-                        acc += in_4d(b, c, h_idx, w2_idx) * mask_4d(m, c, p, q2);
-                    if (!(w3_idx < 0 || w3_idx >= W || h_idx < 0 || h_idx >= H) && q3 < K)
-                        acc += in_4d(b, c, h_idx, w3_idx) * mask_4d(m, c, p, q3);
+                // if our height out of bounds, dont bother
+                int h_idx = (h * S + p);
+                if (!(h_idx < 0 || h_idx >= H)) {
+                    // turn q into # of loop iters to target instead of just q
+                    int qbnd = ceil(1.0f * K / Q_UNROLL);
+                    for (int q = 0; q < qbnd; q++) {
+                        // calc q0..2 and w0..2
+                        int q0 = q * Q_UNROLL + 0;
+                        int q1 = q * Q_UNROLL + 1;
+                        int q2 = q * Q_UNROLL + 2;
+                        // int q3 = q * Q_UNROLL + 3;
+                        int w0_idx = (w * S + q0);
+                        int w1_idx = (w * S + q1);
+                        int w2_idx = (w * S + q2);
+                        // int w3_idx = (w * S + q3);
+                        // if target idx is not within input bounds, or q# is too far, use 0, otherwise grab value
+                        if (!(w0_idx < 0 || w0_idx >= W) && q0 < K)
+                            acc += in_4d(b, c, h_idx, w0_idx) * mask_4d(m, c, p, q0);
+                        if (!(w1_idx < 0 || w1_idx >= W) && q1 < K)
+                            acc += in_4d(b, c, h_idx, w1_idx) * mask_4d(m, c, p, q1);
+                        if (!(w2_idx < 0 || w2_idx >= W) && q2 < K)
+                            acc += in_4d(b, c, h_idx, w2_idx) * mask_4d(m, c, p, q2);
+                        // if (!(w3_idx < 0 || w3_idx >= W) && q3 < K)
+                        //     acc += in_4d(b, c, h_idx, w3_idx) * mask_4d(m, c, p, q3);
+                    }
                 }
             }
         }
@@ -102,49 +106,54 @@ __global__ void conv_forward_kernel(float * __restrict__ output, const float * _
     }
     else
     {
+        // 8 should scale to larger Ks much better, as well as being at least one full iteration
         #define Q_UNROLL 8
         // beyond this K >= 8, performance gains fetter out
         // only a few unrolls
         for (int c = 0; c < C; c++) { // sum over all input channels
             for (int p = 0; p < K; p++) { // loop over KxK filter
-                // turn q into # of loop iters to target instead of just q
-                int qbnd = ceil(1.0f * K / Q_UNROLL);
-                for (int q = 0; q < qbnd; q++) {
-                    // calc q0..7 and w0..7
-                    int h_idx = (h * S + p);
-                    int q0 = q * Q_UNROLL + 0;
-                    int q1 = q * Q_UNROLL + 1;
-                    int q2 = q * Q_UNROLL + 2;
-                    int q3 = q * Q_UNROLL + 3;
-                    int q4 = q * Q_UNROLL + 4;
-                    int q5 = q * Q_UNROLL + 5;
-                    int q6 = q * Q_UNROLL + 6;
-                    int q7 = q * Q_UNROLL + 7;
-                    int w0_idx = (w * S + q0);
-                    int w1_idx = (w * S + q1);
-                    int w2_idx = (w * S + q2);
-                    int w3_idx = (w * S + q3);
-                    int w4_idx = (w * S + q4);
-                    int w5_idx = (w * S + q5);
-                    int w6_idx = (w * S + q6);
-                    int w7_idx = (w * S + q7);
-                    // if target idx is not within input bounds, or q# is too far, use 0, otherwise grab value
-                    if (!(w0_idx < 0 || w0_idx >= W || h_idx < 0 || h_idx >= H) && q0 < K)
-                        acc += in_4d(b, c, h_idx, w0_idx) * mask_4d(m, c, p, q0);
-                    if (!(w1_idx < 0 || w1_idx >= W || h_idx < 0 || h_idx >= H) && q1 < K)
-                        acc += in_4d(b, c, h_idx, w1_idx) * mask_4d(m, c, p, q1);
-                    if (!(w2_idx < 0 || w2_idx >= W || h_idx < 0 || h_idx >= H) && q2 < K)
-                        acc += in_4d(b, c, h_idx, w2_idx) * mask_4d(m, c, p, q2);
-                    if (!(w3_idx < 0 || w3_idx >= W || h_idx < 0 || h_idx >= H) && q3 < K)
-                        acc += in_4d(b, c, h_idx, w3_idx) * mask_4d(m, c, p, q3);
-                    if (!(w4_idx < 0 || w4_idx >= W || h_idx < 0 || h_idx >= H) && q4 < K)
-                        acc += in_4d(b, c, h_idx, w4_idx) * mask_4d(m, c, p, q4);
-                    if (!(w5_idx < 0 || w5_idx >= W || h_idx < 0 || h_idx >= H) && q5 < K)
-                        acc += in_4d(b, c, h_idx, w5_idx) * mask_4d(m, c, p, q5);
-                    if (!(w6_idx < 0 || w6_idx >= W || h_idx < 0 || h_idx >= H) && q6 < K)
-                        acc += in_4d(b, c, h_idx, w6_idx) * mask_4d(m, c, p, q6);
-                    if (!(w7_idx < 0 || w7_idx >= W || h_idx < 0 || h_idx >= H) && q7 < K)
-                        acc += in_4d(b, c, h_idx, w7_idx) * mask_4d(m, c, p, q7);
+                // if our height out of bounds, dont bother
+                int h_idx = (h * S + p);
+                if (!(h_idx < 0 || h_idx >= H)) {
+                    // turn q into # of loop iters to target instead of just q
+                    int qbnd = ceil(1.0f * K / Q_UNROLL);
+                    for (int q = 0; q < qbnd; q++) {
+                        // calc q0..7 and w0..7
+                        int h_idx = (h * S + p);
+                        int q0 = q * Q_UNROLL + 0;
+                        int q1 = q * Q_UNROLL + 1;
+                        int q2 = q * Q_UNROLL + 2;
+                        int q3 = q * Q_UNROLL + 3;
+                        int q4 = q * Q_UNROLL + 4;
+                        int q5 = q * Q_UNROLL + 5;
+                        int q6 = q * Q_UNROLL + 6;
+                        int q7 = q * Q_UNROLL + 7;
+                        int w0_idx = (w * S + q0);
+                        int w1_idx = (w * S + q1);
+                        int w2_idx = (w * S + q2);
+                        int w3_idx = (w * S + q3);
+                        int w4_idx = (w * S + q4);
+                        int w5_idx = (w * S + q5);
+                        int w6_idx = (w * S + q6);
+                        int w7_idx = (w * S + q7);
+                        // if target idx is not within input bounds, or q# is too far, use 0, otherwise grab value
+                        if (!(w0_idx < 0 || w0_idx >= W) && q0 < K)
+                            acc += in_4d(b, c, h_idx, w0_idx) * mask_4d(m, c, p, q0);
+                        if (!(w1_idx < 0 || w1_idx >= W) && q1 < K)
+                            acc += in_4d(b, c, h_idx, w1_idx) * mask_4d(m, c, p, q1);
+                        if (!(w2_idx < 0 || w2_idx >= W) && q2 < K)
+                            acc += in_4d(b, c, h_idx, w2_idx) * mask_4d(m, c, p, q2);
+                        if (!(w3_idx < 0 || w3_idx >= W) && q3 < K)
+                            acc += in_4d(b, c, h_idx, w3_idx) * mask_4d(m, c, p, q3);
+                        if (!(w4_idx < 0 || w4_idx >= W) && q4 < K)
+                            acc += in_4d(b, c, h_idx, w4_idx) * mask_4d(m, c, p, q4);
+                        if (!(w5_idx < 0 || w5_idx >= W) && q5 < K)
+                            acc += in_4d(b, c, h_idx, w5_idx) * mask_4d(m, c, p, q5);
+                        if (!(w6_idx < 0 || w6_idx >= W) && q6 < K)
+                            acc += in_4d(b, c, h_idx, w6_idx) * mask_4d(m, c, p, q6);
+                        if (!(w7_idx < 0 || w7_idx >= W) && q7 < K)
+                            acc += in_4d(b, c, h_idx, w7_idx) * mask_4d(m, c, p, q7);
+                    }
                 }
             }
         }
