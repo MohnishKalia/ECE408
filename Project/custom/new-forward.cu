@@ -114,6 +114,8 @@ __global__ void conv_forward_kernel(float * __restrict__ output, const float * _
     {
         // 8 should scale to larger Ks much better, as well as being at least one full iteration
         #define Q_UNROLL 8
+        // turn q into # of loop iters to target instead of just q
+        const int qbnd = ceil(1.0f * K / Q_UNROLL);
         // beyond this K >= 8, performance gains fetter out
         // only a few unrolls
         for (int c = 0; c < C; c++) { // sum over all input channels
@@ -121,8 +123,6 @@ __global__ void conv_forward_kernel(float * __restrict__ output, const float * _
                 // if our height out of bounds, dont bother
                 int h_idx = (h * S + p);
                 if (!(h_idx < 0 || h_idx >= H)) {
-                    // turn q into # of loop iters to target instead of just q
-                    int qbnd = ceil(1.0f * K / Q_UNROLL);
                     for (int q = 0; q < qbnd; q++) {
                         // calc q0..7 and w0..7
                         int h_idx = (h * S + p);
